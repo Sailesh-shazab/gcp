@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Speed, Distance, and Direction Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Real-Time Speed, Distance, and Direction</h1>
+        <button id="startButton" onclick="startTracking()">Start Tracking</button>
+        <button id="stopButton" onclick="stopTracking()" disabled>Stop Tracking</button>
+        <button id="downloadButton" onclick="downloadData()" disabled>Download Data</button>
+        <p id="locationInfo">Waiting for GPS data...</p>
+        <p id="speedResult"></p>
+        <p id="distanceResult"></p>
+        <p id="directionResult"></p>
+    </div>
+
+    <script>
+        let prevPosition = null;
+        let totalDistance = 0;
+        let watchId = null;
+        let gps_data = [];
+
+        // Function to start tracking live location
+        function startTracking() {
+            if (navigator.geolocation) {
+                watchId = navigator.geolocation.watchPosition(updateLocation, handleError, {
+                    enableHighAccuracy: true,
+                    maximumAge: 1000,
+                    timeout: 10000 // Increased timeout to 10 seconds
+                });
+                document.getElementById('locationInfo').textContent = 'Tracking started...';
+                document.getElementById('startButton').disabled = true;
+                document.getElementById('stopButton').disabled = false;
+                gps_data = []; // Clear previous data
+            } else {
+                document.getElementById('locationInfo').textContent = 'Geolocation is not supported by your browser.';
+            }
+        }
+
+        // Function to stop tracking live location
+        function stopTracking() {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                document.getElementById('locationInfo').textContent = 'Tracking stopped.';
+                document.getElementById('startButton').disabled = false;
+                document.getElementById('stopButton').disabled = true;
+                document.getElementById('downloadButton').disabled = false; // Enable download button
+            }
+        }
+
+        // Function to handle location updates
+        function updateLocation(position) {
+            const { latitude, longitude, speed } = position.coords;
+
+            // Display the current location
+            document.getElementById('locationInfo').textContent = `Latitude: ${latitude.toFixed(6)}, Longitude: ${longitude.toFixed(6)}`;
+
+            // Calculate speed in m/s (if available) and update display
+            if (speed !== null) {
+                document.getElementById('speedResult').textContent = `Speed: ${speed.toFixed(2)} m/s`;
+            }
+
+            // Calculate distance and direction if there was a previous position
+            if (prevPosition) {
+                const distance = calculateDistance(prevPosition.coords, position.coords);
+                totalDistance += distance;
+                document.getElementById('distanceResult').textContent = `Total Distance: ${totalDistance.toFixed(2)} meters`;
+
+                const direction = calculateDirection(prevPosition.coords, position.coords);
+                document.getElementById('directionResult').textContent = `Direction: ${direction.toFixed(2)}°`;
+            }
+
+            // Save GPS data
+            gps_data.push({ latitude, longitude, timestamp: new Date().toISOString() });
+
+            // Update previous position
+            prevPosition = position;
+        }
+
+        // Function to calculate the distance between two coordinates (Haversine formula)
+        function calculateDistance(coords1, coords2) {
+            const R = 6371e3; // Radius of Earth in meters
+            const lat1 = coords1.latitude * (Math.PI / 180);
+            const lat2 = coords2.latitude * (Math.PI / 180);
+            const deltaLat = lat2 - lat1;
+            const deltaLon = (coords2.longitude - coords1.longitude) * (Math.PI / 180);
+
+            const a = Math.sin(deltaLat / 2) ** 2 +
+                Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c; // Distance in meters
+        }
+
+        // Function to calculate the direction (bearing) between two coordinates
+        function calculateDirection(coords1, coords2) {
+            const lat1 = coords1.latitude * (Math.PI / 180);
+            const lat2 = coords2.latitude * (Math.PI / 180);
+            const deltaLon = (coords2.longitude - coords1.longitude) * (Math.PI / 180);
+
+            const y = Math.sin(deltaLon) * Math.cos(lat2);
+            const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+            return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360; // Bearing in degrees
+        }
+
+        // Function to download GPS data as CSV
+        function downloadData() {
+            let csvContent = "data:text/csv;charset=utf-8,Latitude,Longitude,Timestamp\n";
+            gps_data.forEach(row => {
+                csvContent += `${row.latitude},${row.longitude},${row.timestamp}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "gps_data.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Disable download button after download
+            document.getElementById('downloadButton').disabled = true;
+        }
+
+        // Error handling for geolocation
+        function handleError(error) {
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    alert("User denied the request for Geolocation.");
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    alert("Location information is unavailable.");
+                    break;
+                case error.TIMEOUT:
+                    alert("The request to get user location timed out.");
+                    break;
+                default:
+                    alert("An unknown error occurred.");
+                    break;
+            }
+        }
+    </script>
+
+</body>
+
+</html>
